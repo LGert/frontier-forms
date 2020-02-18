@@ -11,6 +11,7 @@ export interface FrontierDataGraphQLProps {
   schema?: JSONSchema7;
   save?: (values: object) => Promise<undefined | object>;
   formats?: { [k: string]: string };
+  mutationProps?: object
 }
 
 export type SchemaFromGraphQLPropsReturn = { schema: JSONSchema7, mutationName: string } | null;
@@ -76,16 +77,19 @@ export function saveData (
   } else if (!props.mutation && props.save) {
     return props.save(values);
   } else {
+    // @ts-ignore
+    const { optimisticResponse, ...mutationProps } = props.mutationProps || {};
     return props.client!.mutate({
       mutation: props.mutation,
-      variables: values
+      variables: values,
+      ...mutationProps,
+      ...(!!optimisticResponse ? { optimisticResponse: optimisticResponse(values) } : {}),
     }).then(result => {
       if (result.errors) {
         // FIXME: find a way to handle GQL errors on mutation arguments
-        return {};
-      } else {
-        return result; // submit succeed
+        // return {};
       }
+      return result; // submit succeed
     });
   }
 }
