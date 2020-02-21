@@ -12,6 +12,8 @@ export type UIKitPathHandler =
   (path: string, type: JSONSchema7TypeName, required: boolean, children?: ReactNode) => ComponentType<UIKITFieldProps>;
 export type UIKitTypeHandler =
   (path: string, required: boolean, children?: ReactNode) => ComponentType<UIKITFieldProps>;
+export type UIKitTypenameHandler =
+  (path: string, required: boolean, children?: ReactNode) => ComponentType<UIKITFieldProps>;
 export type UIKitUnknownHandler = (path: string, type: JSONSchema7TypeName) => ComponentType<UIKITFieldProps>;
 export type UIKitFormHandler = (form: FormApi, children?: ReactNode) => ReactNode;
 
@@ -20,16 +22,19 @@ export interface UIKitAPI {
   unknown: (f: UIKitUnknownHandler) => UIKitAPI;
   path: (path: string | RegExp, f: UIKitPathHandler) => UIKitAPI;
   type: (type: JSONSchema7TypeName, f: UIKitTypeHandler) => UIKitAPI;
+  typename: (typename: string, f: UIKitTypenameHandler) => UIKitAPI;
   // internals
   __reducer: (
-    path: string, type: JSONSchema7TypeName, required: boolean, children?: ReactNode
+    path: string, type: JSONSchema7TypeName, typename: string, required: boolean, children?: ReactNode
   ) => ComponentType<UIKITFieldProps>;
   __wrapWithForm: UIKitFormHandler;
+  __handlers: UIKitHandlers;
 }
 
 interface UIKitHandlers {
   unknown: UIKitUnknownHandler;
   types: { [k: string]: UIKitTypeHandler };
+  typenames: { [k: string]: UIKitTypenameHandler };
   paths: { [k: string]: UIKitPathHandler };
   form?: UIKitFormHandler;
 }
@@ -41,7 +46,8 @@ export const UIKit = (): UIKitAPI => {
       return () => null;
     },
     types: {},
-    paths: {}
+    paths: {},
+    typenames: {},
   };
 
   const api: UIKitAPI = {
@@ -55,6 +61,10 @@ export const UIKit = (): UIKitAPI => {
     },
     type: (type, handler) => {
       handlers.types[type] = handler;
+      return api;
+    },
+    typename: (typename, handler) => {
+      handlers.typenames[typename] = handler;
       return api;
     },
     path: (path, handler) => {
@@ -77,7 +87,8 @@ export const UIKit = (): UIKitAPI => {
       }
     },
 
-    __reducer: (path, type, required, children) => {
+    __reducer: (path, type, typename, required, children) => {
+      console.log('UIKIT REDUCE', path, type, typename, required);
       let pathHandler: UIKitPathHandler | undefined = find(handlers.paths, (_handler, handlerPath: string) => {
         if (handlerPath[0] === '/') {
           const regex = new RegExp(handlerPath.substr(1, handlerPath.length).substr(0, handlerPath.length - 2));
@@ -91,12 +102,17 @@ export const UIKit = (): UIKitAPI => {
         return pathHandler(path, type, required, children);
       }
 
+      if (typename && handlers.typenames[typename]) {
+        return (handlers.typenames[typename] as UIKitTypenameHandler)(path, required, children);
+      }
       if (handlers.types[type]) {
         return (handlers.types[type] as UIKitTypeHandler)(path, required, children);
       }
 
       return handlers.unknown(path, type);
     },
+
+    __handlers: handlers,
   };
   return api;
 };

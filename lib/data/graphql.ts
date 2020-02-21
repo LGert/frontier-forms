@@ -1,9 +1,9 @@
-import { ApolloClient } from 'apollo-client';
-import { DocumentNode, FieldNode } from 'graphql';
-import { fromIntrospectionQuery } from 'graphql-2-json-schema';
-import { JSONSchema7 } from 'json-schema';
-import { cloneDeep, get, has, map, merge, reduce, set } from 'lodash';
-import { introspectionQuery } from './introspectionQuery';
+import {ApolloClient} from 'apollo-client';
+import {DocumentNode, FieldNode} from 'graphql';
+import {fromIntrospectionQuery} from 'graphql-2-json-schema';
+import {JSONSchema7} from 'json-schema';
+import {cloneDeep, get, has, map, merge, reduce, set} from 'lodash';
+import {introspectionQuery} from './introspectionQuery';
 
 export interface FrontierDataGraphQLProps {
   mutation: DocumentNode;
@@ -226,50 +226,53 @@ export function buildFormSchema (schema: JSONSchema7, mutationName: string): JSO
 }
 
 // tslint:disable-next-line typedef
-function formPropertiesReducer (schema, referenceSchema): JSONSchema7 {
+function formPropertiesReducer (schema, referenceSchema, __typename?): JSONSchema7 {
   return {
     type: 'object',
-    properties: reduce<JSONSchema7, { [k: string]: any }>( // tslint:disable-line no-any
-      schema.properties,
-      (result, value, key) => {
-        if (get(value, '$ref')) {
-          const refTypeName = get(value, '$ref')!.replace('#/definitions/', '');
-          const refType = referenceSchema.definitions[refTypeName];
-          if (!refType) {
-            console.warn(`unknown $ref "${refTypeName}" for ${key}`);
-          }
-          result[key] = refType ? cloneDeep(formPropertiesReducer(refType, referenceSchema)) : {};
-        } else if (value.type === 'array') {
-          if (get(value.items, '$ref')) {
-            const refTypeName = get(value.items, '$ref')!.replace('#/definitions/', '');
+    ...(__typename ? {__typename} : {}),
+    properties: {
+      ...reduce<JSONSchema7, { [k: string]: any }>( // tslint:disable-line no-any
+        schema.properties,
+        (result, value, key) => {
+          if (get(value, '$ref')) {
+            const refTypeName = get(value, '$ref')!.replace('#/definitions/', '');
             const refType = referenceSchema.definitions[refTypeName];
             if (!refType) {
               console.warn(`unknown $ref "${refTypeName}" for ${key}`);
             }
-            result[key] = refType ?
-              {
+            result[key] = refType ? cloneDeep(formPropertiesReducer(refType, referenceSchema, refTypeName)) : {};
+          } else if (value.type === 'array') {
+            if (get(value.items, '$ref')) {
+              const refTypeName = get(value.items, '$ref')!.replace('#/definitions/', '');
+              const refType = referenceSchema.definitions[refTypeName];
+              if (!refType) {
+                console.warn(`unknown $ref "${refTypeName}" for ${key}`);
+              }
+              result[key] = refType ?
+                {
+                  type: 'array',
+                  items: cloneDeep(formPropertiesReducer(refType, referenceSchema, refTypeName))
+                } :
+                {};
+            } else {
+              result[key] = {
                 type: 'array',
-                items: cloneDeep(formPropertiesReducer(refType, referenceSchema))
-              } :
-              {};
+                items: has(value.items, 'properties') ?
+                  // tslint:disable-next-line no-any
+                  {...(value.items as any), properties: formPropertiesReducer(value.items, referenceSchema)}
+                  : value.items
+              };
+            }
           } else {
-            result[key] = {
-              type: 'array',
-              items: has(value.items, 'properties') ?
-                // tslint:disable-next-line no-any
-                { ...(value.items as any), properties: formPropertiesReducer(value.items, referenceSchema) }
-                : value.items
-            };
+            result[key] = has(value, 'properties') ?
+              {...value, properties: formPropertiesReducer(value, referenceSchema)}
+              : value;
           }
-        } else {
-          result[key] = has(value, 'properties') ?
-            { ...value, properties: formPropertiesReducer(value, referenceSchema) }
-            : value;
-        }
-        return result;
-      },
-      {}
-    ),
+          return result;
+        },
+        {}
+      ),
+    },
     required: schema.required
   };
 }

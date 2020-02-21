@@ -53,6 +53,7 @@ export function visitSchema (
 ) {
   each(schema.properties, (value: JSONSchema7, key: string) => {
     const pathKey = namespace ? `${namespace}.${key}` : key;
+    // @ts-ignore
     if (value.type === 'object') {
       visitSchema(
         value,
@@ -64,6 +65,41 @@ export function visitSchema (
       visitProperty(pathKey, value, requiredFields.includes(key));
     }
   });
+}
+
+export function getKitFromSchema(
+  schema: JSONSchema7,
+  mapProperty: (path: string, definition: JSONSchema7, required: boolean, childrenKits?: any) => void,
+  requiredFields: string[],
+  customDefinedHandlers: string[],
+) {
+  function getKit(
+    _schema: JSONSchema7,
+    _requiredFields: string[],
+    _namespace?: string,
+    _isPropOfCustomType?: boolean
+  ) {
+    const kit = {};
+    each(_schema.properties, (value: JSONSchema7, key: string) => {
+      const pathKey = _namespace ? `${_namespace}.${key}` : key;
+      const kitKey = _isPropOfCustomType ? key : pathKey;
+
+      // @ts-ignore
+      if (customDefinedHandlers.includes(value.__typename as string)) {
+        const childrenKits = getKit(value, value.required || [], pathKey, true);
+        kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key), childrenKits);
+      } else if (value.type === 'object') {
+        kit[kitKey] = getKit(value, value.required || [], pathKey);
+      } else if(value.type === 'array') {
+        // const childrenKits = getKit({ properties: { item: value.items } as JSONSchema7 } as JSONSchema7, value.required || []);
+        kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key));
+      } else {
+        kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key));
+      }
+    });
+    return kit;
+  }
+  return getKit(schema, requiredFields);
 }
 
 // Return a configured `ajv` validator for the given `schema` Form Schema

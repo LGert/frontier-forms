@@ -1,9 +1,9 @@
 import { FormApi, FormState, FormSubscription, formSubscriptionItems, Unsubscribe } from 'final-form';
 import { JSONSchema7 } from 'json-schema';
-import { each, isEqual, memoize, set, values } from 'lodash';
+import { each, isEqual, memoize, set, values, keys } from 'lodash';
 import { Component, ComponentType } from 'react';
 import * as React from 'react'; // tslint:disable-line no-duplicate-imports
-import { getFormFromSchema, visitSchema } from '../core/core';
+import {getFormFromSchema, getKitFromSchema, visitSchema} from '../core/core';
 import { FrontierDataProps, schemaFromDataProps } from '../data';
 import { saveData } from '../data/graphql';
 import { UIKitAPI, UIKITFieldProps } from '../ui-kit';
@@ -148,7 +148,84 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
       }
     });
     return save;
+  };
+
+  getArrayKit(definition: JSONSchema7) {
+    const customTypeHandlers = keys(this.props.uiKit!.__handlers.typenames);
+    const arrayKit: any = {};
+    // @ts-ignore
+    definition.__typename = definition.items.__typename ? `[${definition.items.__typename}]` : null;
+    return {
+      item: ({ index, value, initial, change, ...arrayState }) => {
+        const fieldProps = arrayState as UIKITFieldProps;
+        let states = {};
+        // @ts-ignore
+        if (definition.__typename) {
+          states = Object.keys(value).reduce((obj, key) => {
+            obj[key] = {
+              name: `${arrayState.name}.${key}`,
+              value: value[key],
+              initial: initial ? initial[key] : null,
+              change: newValue => {
+                change({...value, [key]: newValue});
+              }
+            };
+            return obj;
+          }, {});
+        }
+
+        return (getKitFromSchema(
+          { properties: { item: definition.items } as JSONSchema7} as JSONSchema7,
+          (arrayItemPath, arrayItemDefinition, required_a, arrayItemChildrenKits) => {
+            const ArrayItemComponent = this.uiKitComponentFor(arrayItemPath, arrayItemDefinition, required_a);
+            // @ts-ignore
+            if (arrayItemDefinition.__typename) {
+              // @ts-ignore
+              return <ArrayItemComponent key={arrayItemPath} change={change} {...fieldProps!} states={states!} kit={arrayItemChildrenKits} />;
+            }
+            // @ts-ignore
+            if (definition.type === 'object' || definition.__typename) {
+              return () => <ArrayItemComponent key={arrayItemPath} change={change} {...arrayState!} {...states[arrayItemPath.replace('item.', '')]} />;
+            }
+            return () => <ArrayItemComponent key={arrayItemPath} change={change} value={value} initial={initial} {...fieldProps} />;
+          },
+          definition.required || [],
+          customTypeHandlers) as any).item;
+      }
+    }
   }
+
+  getFieldsKit = () => {
+    const customTypeHandlers = keys(this.props.uiKit!.__handlers.typenames);
+    return getKitFromSchema(
+      this.schema!,
+      (path, definition, required, childrenKits) => {
+        return props => {
+          const state = this.form!.getFieldState(path);
+          // get the children's form state
+          const states = {};
+          // @ts-ignore
+          if (!state && definition.__typename) {
+            const fields = this.form!.getRegisteredFields();
+            fields.reduce((childrenState: object, fieldName: string) => {
+              if (fieldName.startsWith(path)) {
+                childrenState[fieldName.replace(`${path}.`, '')] = this.form!.getFieldState(fieldName);
+              }
+              return childrenState;
+            }, states);
+          }
+          let arrayKit: any = {};
+          if (definition.type === 'array') {
+            arrayKit = this.getArrayKit(definition);
+          }
+          const FieldComponent = this.uiKitComponentFor(path, definition, required);
+          return <FieldComponent key={path} kit={definition.type === 'array' ? arrayKit : childrenKits} states={states} {...state!} {...props} />;
+        }
+      },
+      this.schema!.required || [],
+      customTypeHandlers || []
+    );
+  };
 
   renderProps (): FrontierRenderProps {
     let modifiers: any = {}; // tslint:disable-line no-any
@@ -195,19 +272,7 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
     });
 
     if (this.props.uiKit) {
-      visitSchema(
-        this.schema!,
-        (path, definition, required) => {
-          set(
-            kit,
-            path, props => {
-              const state = this.form!.getFieldState(path);
-              const FieldComponent = this.uiKitComponentFor(path, definition, required);
-              return <FieldComponent {...state!} {...props} />;
-            });
-        },
-        this.schema!.required || []
-      );
+      kit = this.getFieldsKit();
     }
 
     return {
@@ -219,24 +284,18 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
   }
   uiKitComponentFor: componentGetter = memoize(
     (path: string, definition: JSONSchema7, required: boolean) =>
-    // tslint:disable-next-line no-any
-      this.props.uiKit!.__reducer(`${this.mutationName!}.${path}`, definition.type as any, required),
+      // @ts-ignore
+      this.props.uiKit!.__reducer(`${this.mutationName!}.${path}`, definition.type as any, definition.__typename, required),
     // custom cache key resolver
-    (path: string, definition: JSONSchema7, _required: boolean) => `${this.mutationName!}.${path}-${definition.type}`
+    // @ts-ignore
+    (path: string, definition: JSONSchema7, _required: boolean) => `${this.mutationName!}.${path}-${definition.type}-${definition.__typename}`
   );
 
   renderWithKit () {
     let fields: { [k: string]: JSX.Element } = {};
 
-    visitSchema(
-      this.schema!,
-      (path, definition, required) => {
-        const state = this.form!.getFieldState(path);
-        const FieldComponent = this.uiKitComponentFor(path, definition, required);
-        fields[path] = <FieldComponent {...state!} key={path} />;
-      },
-      this.schema!.required || []
-    );
+    const customTypeHandlers = keys(this.props.uiKit!.__handlers.typenames);
+    fields = this.getFieldsKit();
 
     // Sorting fields if an `order` is provided
     if (this.props.order) {
