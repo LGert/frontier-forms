@@ -1,4 +1,4 @@
-import { FormApi, FormState, FormSubscription, formSubscriptionItems, Unsubscribe } from 'final-form';
+import {FieldState, FormApi, FormState, FormSubscription, formSubscriptionItems, Unsubscribe} from 'final-form';
 import { JSONSchema7 } from 'json-schema';
 import { each, isEqual, memoize, set, values, keys } from 'lodash';
 import { Component, ComponentType } from 'react';
@@ -152,7 +152,6 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
 
   getArrayKit(definition: JSONSchema7) {
     const customTypeHandlers = keys(this.props.uiKit!.__handlers.typenames);
-    const arrayKit: any = {};
     // @ts-ignore
     definition.__typename = definition.items.__typename ? `[${definition.items.__typename}]` : null;
     return {
@@ -185,7 +184,7 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
             }
             // @ts-ignore
             if (definition.type === 'object' || definition.__typename) {
-              return () => <ArrayItemComponent key={arrayItemPath} change={change} {...arrayState!} {...states[arrayItemPath.replace('item.', '')]} />;
+              return () => <ArrayItemComponent key={arrayItemPath} change={change} {...fieldProps!} {...states[arrayItemPath.replace('item.', '')]} />;
             }
             return () => <ArrayItemComponent key={arrayItemPath} change={change} value={value} initial={initial} {...fieldProps} />;
           },

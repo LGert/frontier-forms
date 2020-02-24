@@ -88,7 +88,6 @@ export const UIKit = (): UIKitAPI => {
     },
 
     __reducer: (path, type, typename, required, children) => {
-      console.log('UIKIT REDUCE', path, type, typename, required);
       let pathHandler: UIKitPathHandler | undefined = find(handlers.paths, (_handler, handlerPath: string) => {
         if (handlerPath[0] === '/') {
           const regex = new RegExp(handlerPath.substr(1, handlerPath.length).substr(0, handlerPath.length - 2));

@@ -90,9 +90,6 @@ export function getKitFromSchema(
         kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key), childrenKits);
       } else if (value.type === 'object') {
         kit[kitKey] = getKit(value, value.required || [], pathKey);
-      } else if(value.type === 'array') {
-        // const childrenKits = getKit({ properties: { item: value.items } as JSONSchema7 } as JSONSchema7, value.required || []);
-        kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key));
       } else {
         kit[kitKey] = mapProperty(pathKey, value, requiredFields.includes(key));
       }
