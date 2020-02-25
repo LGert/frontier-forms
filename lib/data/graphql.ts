@@ -1,5 +1,5 @@
 import {ApolloClient} from 'apollo-client';
-import {DocumentNode, FieldNode} from 'graphql';
+import {DocumentNode, FieldNode, OperationDefinitionNode} from 'graphql';
 import {fromIntrospectionQuery} from 'graphql-2-json-schema';
 import {JSONSchema7} from 'json-schema';
 import {cloneDeep, get, has, map, merge, reduce, set} from 'lodash';
@@ -19,6 +19,7 @@ export type SchemaFromGraphQLPropsReturn = { schema: JSONSchema7, mutationName: 
 export function schemaFromGraphQLProps (props: FrontierDataGraphQLProps): Promise<SchemaFromGraphQLPropsReturn> {
   if (props.mutation) {
     const mutationName = getMutationNameFromDocumentNode(props.mutation);
+    console.log('mut', mutationName)
     if (!mutationName) {
       return Promise.resolve(null);
     }
@@ -179,30 +180,23 @@ export function saveData (
 //   }
 // }
 export function getMutationNameFromDocumentNode (mutation: DocumentNode): string | null {
-  if (mutation.definitions.length > 1) {
+  const mutationDefinitions = mutation.definitions
+    .filter(definition => definition.kind === 'OperationDefinition' && definition.operation === 'mutation');
+  if (mutationDefinitions.length !== 1) {
     console.warn('please provide 1 mutation document');
     return null;
   } else {
-    const definition = mutation.definitions[0];
-    if (definition.kind === 'OperationDefinition' && definition.operation === 'mutation') {
-      if (definition.selectionSet.selections.length === 1 && definition.selectionSet.selections[0].kind === 'Field') {
-        const selection = definition.selectionSet.selections[0] as FieldNode;
-        if (!selection.name) {
-          console.warn('please provide a named mutation');
-          return null;
-        } else {
-          return selection.name.value;
-        }
-      } else {
-        console.warn(`please provide a valid mutation definition`);
+    const definition = mutationDefinitions[0] as OperationDefinitionNode;
+    if (definition.selectionSet.selections.length === 1 && definition.selectionSet.selections[0].kind === 'Field') {
+      const selection = definition.selectionSet.selections[0] as FieldNode;
+      if (!selection.name) {
+        console.warn('please provide a named mutation');
         return null;
+      } else {
+        return selection.name.value;
       }
     } else {
-      console.warn(
-        'please provide a mutation document, received a ' +
-        (definition.kind === 'OperationDefinition' ? definition.operation : definition.kind) +
-        ' document'
-      );
+      console.warn(`please provide a valid mutation definition`);
       return null;
     }
   }

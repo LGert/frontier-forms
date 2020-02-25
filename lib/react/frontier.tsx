@@ -70,6 +70,7 @@ export class Frontier extends Component<FrontierProps, FrontierState> {
   buildForm () {
     schemaFromDataProps(this.props).then(result => {
       if (result) {
+        console.log('RESULT', result)
         this.schema = result.schema;
         this.mutationName = result.mutationName;
 
