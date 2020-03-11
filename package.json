@@ -8,6 +8,13 @@
   "homepage": "https://frontier-forms.dev",
   "license": "MIT",
   "private": false,
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "transpile": "npm run build",
     "test": "jest",
