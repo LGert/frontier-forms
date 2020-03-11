@@ -17,6 +17,8 @@ export interface FrontierDataGraphQLProps {
 export type SchemaFromGraphQLPropsReturn = { schema: JSONSchema7, mutationName: string } | null;
 // Given GraphQL data props, return a valid form JSONSchema (or null)
 export function schemaFromGraphQLProps (props: FrontierDataGraphQLProps): Promise<SchemaFromGraphQLPropsReturn> {
+
+  console.log('Mutation', props)
   if (props.mutation) {
     const mutationName = getMutationNameFromDocumentNode(props.mutation);
     console.log('mut', mutationName)
@@ -204,11 +206,14 @@ export function getMutationNameFromDocumentNode (mutation: DocumentNode): string
 
 // Given a GraphQL schema JSON Schema and a mutation, return a form schema
 export function buildFormSchema (schema: JSONSchema7, mutationName: string): JSONSchema7 {
+  console.log('Schema', schema)
   const mutationSchema = (schema.properties!.Mutation as JSONSchema7).properties![mutationName] as JSONSchema7;
   if (!mutationSchema) {
     console.warn(`Unknown mutation ${mutationName} provided`);
     return {};
   }
+
+  console.log('Mutationschema', mutationSchema)
 
   const args = mutationSchema.properties!.arguments as JSONSchema7;
   if (args && args.properties && Object.keys(args.properties).length > 0) {
@@ -221,7 +226,8 @@ export function buildFormSchema (schema: JSONSchema7, mutationName: string): JSO
 
 // tslint:disable-next-line typedef
 function formPropertiesReducer (schema, referenceSchema, __typename?): JSONSchema7 {
-  return {
+  const { properties } = schema;
+  return properties ? {
     type: 'object',
     ...(__typename ? {__typename} : {}),
     properties: {
@@ -268,5 +274,5 @@ function formPropertiesReducer (schema, referenceSchema, __typename?): JSONSchem
       ),
     },
     required: schema.required
-  };
+  } : schema;
 }
